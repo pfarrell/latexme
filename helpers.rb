@@ -1,4 +1,4 @@
-%w(gmail mail uri).each { |dependency| require dependency }
+%w(gmail mail uri pathname).each { |dependency| require dependency }
 
 def String.random_alphanumeric(size=16)
   s = ""
@@ -16,12 +16,17 @@ def process!(email)
   begin
     emailid = String.random_alphanumeric
     mkdir!("tmp/" + emailid)
-
+    
     email.attachments.each do |attachment|
-      path = "tmp/" + emailid + "/" + attachement.filename
-      puts attachment.inspect
-      attachment.save_to_file(path)
-      system("pdflatex " + path)
+      if(attachment.filename =~ /\.tex$/)
+        path = "tmp/" + emailid 
+        filename = File.basename(attachment.filename, ".tex")
+        file = File.new(path + "/" + attachment.filename, "w+")
+        file << attachment.decoded
+        file.close
+        system("pdflatex -interaction nonstopmode --output-directory " + path + " " + attachment.filename)
+        mail(email.from, 'RE: ' + email.subject, "Here's your file", path + "/" + filename + ".pdf")
+      end
     end
 
     # here's where we'll get commands to run on doc
@@ -36,26 +41,17 @@ def process!(email)
   #links
 end
 
-def send_email(email, links) 
-  begin
-    mail(email.from, 'pflatex@gmail.com', 'RE: ' + email.subject, data)
-  ensure
-    #cleanup(links)
-  end
-end
-
-def mail(email_to, email_from, email_subject, email_text)
+def mail(email_to, email_subject, email_text, attachment_path)
 
   yml = YAML::load(File.open('config/config.rb'))
-
   gmail = Gmail.new(yml['gmail']['username'], yml['gmail']['password']) do |gmail|
     gmail.deliver do
       to email_to
-      from email_from
       subject email_subject
       text_part do
         body email_text
       end
+      add_file File.expand_path(attachment_path)
     end
   end
 end
